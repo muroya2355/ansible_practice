@@ -1,0 +1,92 @@
+Vagrant.configure(2) do |config|
+
+	config.ssh.insert_key = false
+
+	# Web-VM
+	config.vm.define "websrv" do |websrv|
+		websrv.vm.box = "centos/7"
+		websrv.vm.network "private_network", ip: "192.168.50.102"
+
+		websrv.vm.provider "vb" do |vb|
+			vb.memory = 512
+			vb.cpus = 1
+			vb.name = "websrv"
+		end
+
+		# プロビジョニング
+		websrv.vm.provision "shell", privileged: false, inline: <<-SHELL
+			# SElinux の無効化
+			sudo sed -i -e 's/SELINUX=enforcing/
+			SELINUX=disabled/' /etc/selinux/config
+			# ssh-copy-id コマンドでのパスワード認証を許可
+			sudo sed -i -e 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
+			sudo sed -i -e 's/PasswordAuthentication no/#PasswordAuthentication no/' /etc/ssh/sshd_config
+		SHELL
+	
+		# 仮想マシンの再起動
+		websrv.vm.provision :reload
+
+	end
+	
+	# DB-VM
+	config.vm.define "dbsrv" do |dbsrv|
+		dbsrv.vm.box = "centos/7"
+		dbsrv.vm.network "private_network", ip: "192.168.50.103"
+
+		dbsrv.vm.provider "vb" do |vb|
+			vb.memory = 512
+			vb.cpus = 1
+			vb.name = "dbsrv"
+		end
+
+		# プロビジョニング
+		dbsrv.vm.provision "shell", privileged: false, inline: <<-SHELL
+			# SElinux の無効化
+			sudo sed -i -e 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
+			# ssh-copy-id コマンドでのパスワード認証を許可
+			sudo sed -i -e 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
+			sudo sed -i -e 's/PasswordAuthentication no/#PasswordAuthentication no/' /etc/ssh/sshd_config
+		SHELL
+	
+		# 仮想マシンの再起動
+		dbsrv.vm.provision :reload
+
+	end
+
+	# control-VM
+	config.vm.define "control" do |control|
+		control.vm.box = "centos/7"
+		control.vm.network "private_network", ip: "192.168.50.101"
+		control.vm.synced_folder "./shared", "/home/vagrant/shared", owner: "vagrant", group: "vagrant"
+
+		control.vm.provider "vb" do |vb|
+			vb.memory = 512
+			vb.cpus = 1
+			vb.name = "control"
+		end
+
+		# プロビジョニング
+		control.vm.provision "shell", privileged: false, inline: <<-SHELL
+			# SElinux の無効化
+			sudo sed -i -e 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
+		SHELL
+	
+		# 仮想マシンの再起動
+		control.vm.provision :reload
+
+		control.vm.provision "shell", privileged: false, inline: <<-SHELL
+			sudo yum install -y epel-release ansible expect
+
+			cp -f /home/vagrant/shared/sendkey.expect ~/sendkey.expect
+			chmod 774 ~/sendkey.expect
+
+			mkdir -p ~/.ssh
+			echo -e  'y\n' | ssh-keygen -N "" -f ~/.ssh/id_rsa
+
+			#rm -f ~/.ssh/known_hosts
+			sudo ./sendkey.expect vagrant@192.168.50.102
+			sudo ./sendkey.expect vagrant@192.168.50.103
+		SHELL
+	end
+
+end

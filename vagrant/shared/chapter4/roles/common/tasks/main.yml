@@ -1,0 +1,10 @@
+- name: SELinux の無効化
+  selinux:
+    policy: targeted
+    state: disabled
+
+- name: Firewalld のインストール
+  yum: name=firewalld state=present
+
+- name: Firewalld の有効化
+  service: name=firewalld state=started enabled=yes
